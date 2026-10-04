@@ -4,10 +4,10 @@
   "version": "6.7.0",
   "identifier": "de.deiss-it.ecm-audit",
   "build": {
-    "beforeDevCommand": "",
-    "beforeBuildCommand": "",
-    "frontendDist": "../"
-  },
+  "beforeDevCommand": "",
+  "beforeBuildCommand": "",
+  "frontendDist": "../"
+},
   "app": {
     "windows": [
       {
