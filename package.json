@@ -1,4 +1,11 @@
 {
+  "name": "ecm-audit-app",
+  "private": true,
+  "version": "6.7.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri"
+  },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.1"
   }
