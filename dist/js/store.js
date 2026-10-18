@@ -55,6 +55,16 @@
       return null;
     },
 
+    // Lizenzstatus der Testversion. Im Browser per localStorage "ecm-sim-license" simulierbar.
+    async license() {
+      if (tauri) return tauri.invoke("license_status");
+      try {
+        const sim = JSON.parse(localStorage.getItem("ecm-sim-license") || "null");
+        if (sim) return sim;
+      } catch (e) { /* egal */ }
+      return { trial: false, expired: false, tampered: false, expires: 0, contact: "" };
+    },
+
     async dataDir() {
       if (tauri) return tauri.invoke("data_dir");
       return "Browser-Speicher (localStorage)";

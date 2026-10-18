@@ -47,3 +47,15 @@ Die Oberfläche lässt sich auch direkt im Browser öffnen (`dist/index.html`). 
 - Kapitel II 6 erscheint im Auditbericht (in der Excel fehlte es wegen der Nummer „6.0“).
 - Teilnehmer der Organisation im Auditplan werden vollständig übernommen (Excel verwies doppelt auf Zeile 59).
 - Kapitelauswahl „11. Management von Anlagen …“ entfällt, sie wirkte in der Excel identisch zu 11.1.
+
+## Testversion für Kunden
+
+Die Testversion ist dieselbe App mit eingebauter Laufzeit. Bauen über GitHub: **Actions → „Testversion bauen (Windows)“ → Run workflow**.
+
+- `tage`: Laufzeit ab dem ersten Start beim Kunden (Standard 7)
+- `spaetestens`: hartes Ende in Tagen ab dem Bauen (Standard 21). Verhindert, dass Neuinstallieren die Zeit wieder auf 7 Tage setzt
+- `kontakt`: Text im Sperrbildschirm
+
+Nach Ablauf sperrt die App Bearbeiten, Speichern und Löschen. Exportieren bleibt möglich, damit der Kunde seine Audits mitnehmen kann. Die Sperre greift auch, wenn die Systemuhr um mehr als 6 Stunden zurückgestellt oder `%APPDATA%\de.deiss-it.ecm-audit\lizenz.dat` verändert wird.
+
+Grenzen: Die Prüfung läuft offline. Wer die Systemuhr schon vor dem ersten Start zurückstellt und dort lässt, verlängert die Laufzeit. Gegen einen entschlossenen Angreifer schützt nur eine Online-Lizenzprüfung.

@@ -9,6 +9,7 @@
     filter: "alle",
     saveTimer: null,
     saveStatus: "",
+    license: { trial: false, expired: false },
   };
 
   // ---------- Hilfen ----------
@@ -150,6 +151,7 @@
   }
 
   function render() {
+    if (state.license.expired) return renderLocked();
     renderSidebar();
     $("#btn-liste").classList.toggle("active", state.view === "liste");
     const main = $("#main");
@@ -850,6 +852,7 @@
         return;
       }
       case "print": return doPrint();
+      case "export-alle": return exportAll();
     }
   }
 
@@ -895,6 +898,48 @@
     }
   }
 
+  // ---------- Testversion ----------
+  function trialInfo() {
+    const L = state.license;
+    if (!L.trial) return "";
+    if (L.expired) return "Testversion abgelaufen";
+    const ms = L.expires * 1000 - Date.now();
+    const tage = Math.max(0, Math.ceil(ms / 86400000));
+    const bis = new Date(L.expires * 1000).toLocaleDateString("de-DE");
+    return "Testversion, gültig bis " + bis + " (" + (tage === 1 ? "noch 1 Tag" : "noch " + tage + " Tage") + ")";
+  }
+
+  function renderLocked() {
+    const L = state.license;
+    document.body.classList.add("locked");
+    $("#nav").innerHTML = "";
+    $("#audit-head").innerHTML = "";
+    const bis = L.expires ? new Date(L.expires * 1000).toLocaleDateString("de-DE") : "";
+    $("#main").innerHTML =
+      '<div class="page"><div class="lock">' +
+      "<h1>Testversion abgelaufen</h1>" +
+      "<p>" + (L.tampered
+        ? "Die Testversion wurde gesperrt, weil die Systemuhr zurückgestellt oder die Lizenzdatei verändert wurde."
+        : "Der Testzeitraum ist am " + esc(bis) + " abgelaufen.") + "</p>" +
+      "<p>Deine Audits sind nicht verloren. Du kannst sie exportieren und in der Vollversion wieder importieren.</p>" +
+      (L.contact ? '<p class="lock-contact">Vollversion: ' + esc(L.contact) + "</p>" : "") +
+      '<button class="btn btn-primary" data-act="export-alle">Alle Audits exportieren (' + state.audits.length + ")</button>" +
+      "</div></div>";
+  }
+
+  async function exportAll() {
+    let n = 0, where = "";
+    for (const a of state.audits) {
+      try {
+        where = (await S.exportFile(fileName(a), JSON.stringify(a, null, 2))) || where;
+        n++;
+      } catch (e) {
+        toast("Export fehlgeschlagen: " + (e && e.message ? e.message : e), "error");
+      }
+    }
+    toast(n + (n === 1 ? " Audit" : " Audits") + " exportiert" + (where ? " nach " + where.replace(/[\\/][^\\/]*$/, "") : ""));
+  }
+
   // ---------- Start ----------
   async function init() {
     document.addEventListener("input", (e) => {
@@ -909,6 +954,18 @@
     window.addEventListener("beforeunload", () => { if (state.saveTimer) saveNow(); });
     window.addEventListener("afterprint", () => { $("#print-root").innerHTML = ""; });
 
+    try {
+      state.license = await S.license();
+    } catch (e) {
+      state.license = { trial: true, expired: true, tampered: false, expires: 0, contact: "" };
+    }
+    const ti = trialInfo();
+    if (ti) {
+      const el = document.createElement("div");
+      el.className = "trial-note";
+      el.textContent = ti;
+      $(".sidebar-foot").prepend(el);
+    }
     try {
       state.audits = (await S.list()).map(M.normalize);
     } catch (e) {
