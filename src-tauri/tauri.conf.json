@@ -11,13 +11,14 @@
     "windows": [
       {
         "label": "main",
-        "title": "ECM Audit Suite",
-        "width": 1280,
-        "height": 820,
-        "minWidth": 1024,
-        "minHeight": 640
+        "title": "ECM Audit",
+        "width": 1360,
+        "height": 860,
+        "minWidth": 1100,
+        "minHeight": 680
       }
-    ]
+    ],
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
@@ -28,6 +29,13 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "languages": [
+          "German"
+        ]
+      }
+    }
   }
 }
