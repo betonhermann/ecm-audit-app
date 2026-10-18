@@ -1,0 +1,34 @@
+name: "PR-Build Windows"
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        variante: [vollversion, testversion]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Testversion-Laufzeit setzen
+        if: matrix.variante == 'testversion'
+        shell: bash
+        run: |
+          echo "ECM_TRIAL_DAYS=7" >> "$GITHUB_ENV"
+          echo "ECM_TRIAL_CAP=$(( $(date +%s) + 21 * 86400 ))" >> "$GITHUB_ENV"
+          echo "ECM_TRIAL_CONTACT=Jochen Deiß, deiss-it.de" >> "$GITHUB_ENV"
+      - name: Abhängigkeiten installieren
+        run: npm install
+      - name: App bauen (ohne Release)
+        run: npx tauri build --bundles nsis
+      - name: Installer bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: ECM-Audit-Windows-${{ matrix.variante }}
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          retention-days: 14
