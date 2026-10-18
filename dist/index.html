@@ -115,6 +115,7 @@
 
     header h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.02em; }
     header p { color: var(--text-muted); font-size: 14px; }
+    .tab-content > header { margin-bottom: 24px; }
 
     .actions-group {
       display: flex;
@@ -529,8 +530,21 @@
       ]
     };
 
+    // Leerer Katalog als Vorlage, damit Import gegen die aktuelle Fragenliste läuft
+    const catalogTemplate = JSON.parse(JSON.stringify(sampleAuditData));
+    const SECTORS = ["ecm1", "ecm2", "ecm3", "ecm4"];
+
+    // Schutz gegen kaputtes HTML durch Anführungszeichen oder < > in Freitext
+    function esc(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
       initNavigation();
+      ["meta-company", "meta-auditor", "meta-date", "meta-location"].forEach(id =>
+        document.getElementById(id).addEventListener("input", calculateResults));
       renderAuditTables();
       calculateResults();
     });
@@ -570,7 +584,7 @@
               ${item.isKo ? '<span style="color: var(--danger); font-size: 10px; margin-left: 4px; border: 1px solid var(--danger); padding: 1px 4px; border-radius: 4px;">K.O.</span>' : ''}
               ${item.isCrsc ? '<span style="color: var(--warning); font-size: 10px; margin-left: 4px; border: 1px solid var(--warning); padding: 1px 4px; border-radius: 4px;">CRSC</span>' : ''}
             </td>
-            <td>${item.question}</td>
+            <td>${esc(item.question)}</td>
             <td>
               <select onchange="updateScore('${sector}', ${index}, this.value)">
                 <option value="" ${item.score === "" ? "selected" : ""}>-- Bitte wählen --</option>
@@ -581,7 +595,7 @@
               </select>
             </td>
             <td>
-              <input type="text" value="${item.evidence}" onchange="updateEvidence('${sector}', ${index}, this.value)" placeholder="Nachweis eintragen...">
+              <input type="text" value="${esc(item.evidence)}" onchange="updateEvidence('${sector}', ${index}, this.value)" placeholder="Nachweis eintragen...">
             </td>
           `;
           tbody.appendChild(tr);
@@ -596,6 +610,11 @@
 
     function updateEvidence(sector, index, value) {
       sampleAuditData[sector][index].evidence = value;
+      calculateResults(); // Feststellung im Maßnahmenplan aktualisieren
+    }
+
+    function updateMeasure(sector, index, value) {
+      sampleAuditData[sector][index].measure = value;
     }
 
     function calculateResults() {
@@ -608,7 +627,7 @@
         let sectorAchieved = 0;
         let sectorPossible = 0;
 
-        sampleAuditData[sector].forEach(item => {
+        sampleAuditData[sector].forEach((item, index) => {
           if (item.isCrsc && !crscActive) return;
 
           if (item.score !== "" && item.score !== "NA") {
@@ -620,7 +639,7 @@
             }
 
             if (item.score < 1.0) {
-              actionItems.push({ sector: sector.toUpperCase(), id: item.id, evidence: item.evidence, isKo: item.isKo });
+              actionItems.push({ sector, index, item });
             }
           }
         });
@@ -646,7 +665,7 @@
 
       document.getElementById("open-actions").innerText = actionItems.length;
       renderActionPlan(actionItems);
-      updateReport(actionItems.length);
+      updateReport(actionItems.length, hasKoFailed, totalPossible, overallPercent);
     }
 
     function renderActionPlan(items) {
@@ -658,30 +677,50 @@
         return;
       }
 
-      items.forEach(item => {
+      items.forEach(({ sector, index, item }) => {
+        const scoreText = item.score === 0.5 ? "Teilweise erfüllt" : "Nicht erfüllt";
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td><span style="color: var(--warning); font-weight: 600;">${item.sector}</span></td>
-          <td><strong>${item.id}</strong></td>
-          <td>${item.evidence || "Abweichung dokumentiert"}</td>
-          <td><input type="text" placeholder="Maßnahme & Frist eintragen..."></td>
+          <td><span style="color: var(--warning); font-weight: 600;">${sector.toUpperCase()}</span></td>
+          <td><strong>${esc(item.id)}</strong>${item.isKo ? ' <span style="color: var(--danger); font-size: 10px;">K.O.</span>' : ''}</td>
+          <td>${esc(item.question)}<br><span style="color: var(--text-muted); font-size: 13px;">${scoreText}: ${esc(item.evidence || "kein Nachweis eingetragen")}</span></td>
+          <td><input type="text" value="${esc(item.measure)}" onchange="updateMeasure('${sector}', ${index}, this.value)" placeholder="Maßnahme & Frist eintragen..."></td>
         `;
         tbody.appendChild(tr);
       });
     }
 
-    function updateReport(countAbw) {
-      const company = document.getElementById("meta-company").value || "[Organisation offen]";
-      const auditor = document.getElementById("meta-auditor").value || "[Nicht angegeben]";
-      
-      document.getElementById("rep-company").innerText = company;
-      document.getElementById("rep-auditor").innerText = auditor;
+    function updateReport(countAbw, hasKoFailed, ratedCount, overallPercent) {
+      const val = id => document.getElementById(id).value.trim();
+      const setSig = (id, text, fallback) => {
+        const el = document.getElementById(id);
+        el.innerText = text || fallback;
+        el.style.color = text ? "var(--text-main)" : "var(--danger)";
+      };
+      setSig("rep-company", val("meta-company"), "[Organisation offen]");
+      setSig("rep-auditor", val("meta-auditor"), "[Nicht angegeben]");
 
-      let abwText = countAbw === 0 ? "Im Rahmen des Audits wurden keine Abweichungen festgestellt." :
-                    countAbw === 1 ? "Im Rahmen des Audits wurde 1 Abweichung festgestellt." :
-                    `Im Rahmen des Audits wurden ${countAbw} Abweichungen festgestellt.`;
+      const summary = document.getElementById("report-summary-text");
+      if (ratedCount === 0) {
+        summary.innerText = "Bitte bewerten Sie die Fragen in den Sektoren, um den Bericht zu generieren.";
+        return;
+      }
 
-      document.getElementById("report-summary-text").innerText = abwText + " Das Instandhaltungsmanagementsystem ist aufgebaut und entspricht den Vorgaben der EU 2019/779.";
+      const ort = [val("meta-location"), val("meta-date") ? "am " + new Date(val("meta-date")).toLocaleDateString("de-DE") : ""].filter(Boolean).join(", ");
+      let text = ort ? `Audit ${ort}. ` : "";
+      text += countAbw === 0 ? "Im Rahmen des Audits wurden keine Abweichungen festgestellt." :
+              countAbw === 1 ? "Im Rahmen des Audits wurde 1 Abweichung festgestellt." :
+              `Im Rahmen des Audits wurden ${countAbw} Abweichungen festgestellt.`;
+      text += ` Gesamterfüllung: ${overallPercent} %.`;
+
+      if (hasKoFailed) {
+        text += " Mindestens ein K.O.-Kriterium ist nicht erfüllt. Die Anforderungen der Durchführungsverordnung (EU) 2019/779 sind damit nicht erfüllt.";
+      } else if (countAbw > 0) {
+        text += " Das Instandhaltungsmanagementsystem ist aufgebaut. Die festgestellten Abweichungen sind gemäß Maßnahmenplan zu beheben.";
+      } else {
+        text += " Das Instandhaltungsmanagementsystem ist aufgebaut und entspricht den Vorgaben der Durchführungsverordnung (EU) 2019/779.";
+      }
+      summary.innerText = text;
     }
 
     function exportJSON() {
@@ -696,21 +735,44 @@
         data: sampleAuditData
       };
       
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObject, null, 2));
+      const blob = new Blob([JSON.stringify(exportObject, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
       const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `ECM_Audit_${new Date().toISOString().slice(0,10)}.json`);
+      downloadAnchor.href = url;
+      downloadAnchor.download = `ECM_Audit_${new Date().toISOString().slice(0,10)}.json`;
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    // Importierte Bewertungen per ID auf den aktuellen Fragenkatalog legen.
+    // Fehlt ein Sektor oder eine Frage in der Datei, bleibt sie leer statt die App abzuschießen.
+    function mergeImported(data) {
+      const merged = JSON.parse(JSON.stringify(catalogTemplate));
+      SECTORS.forEach(sector => {
+        const imported = Array.isArray(data[sector]) ? data[sector] : [];
+        merged[sector].forEach(item => {
+          const src = imported.find(i => i && i.id === item.id);
+          if (!src) return;
+          const s = src.score;
+          item.score = (s === "NA" || s === "") ? s : ([0, 0.5, 1].includes(Number(s)) ? Number(s) : "");
+          item.evidence = typeof src.evidence === "string" ? src.evidence : "";
+          item.measure = typeof src.measure === "string" ? src.measure : "";
+        });
+      });
+      return merged;
     }
 
     function importJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
       const fileReader = new FileReader();
       fileReader.onload = function(e) {
         try {
           const parsed = JSON.parse(e.target.result);
-          if (parsed.data) sampleAuditData = parsed.data;
+          if (!parsed.data || typeof parsed.data !== "object") throw new Error("Kein Audit-Export");
+          sampleAuditData = mergeImported(parsed.data);
           if (parsed.metadata) {
             document.getElementById("meta-company").value = parsed.metadata.company || "";
             document.getElementById("meta-auditor").value = parsed.metadata.auditor || "";
@@ -724,10 +786,12 @@
           renderAuditTables();
           calculateResults();
         } catch (err) {
-          alert("Fehler beim Laden der Datei.");
+          alert("Fehler beim Laden der Datei: " + err.message);
+        } finally {
+          event.target.value = ""; // gleiche Datei erneut importierbar
         }
       };
-      fileReader.readAsText(event.target.files[0]);
+      fileReader.readAsText(file);
     }
   </script>
 </body>
